@@ -28,8 +28,8 @@ interface Plant {
   plantedAt: number;
 }
 
-// Inventory items - harvested weed with unknown traits
-interface HarvestItem {
+// Buds - harvested weed with unknown traits until researched
+interface BudItem {
   id: string;
   name: string;
   quantity: number;
@@ -58,6 +58,19 @@ interface SeedItem {
   createdAt: number;
 }
 
+// Store strains with fixed characteristics
+interface StoreStrain {
+  name: string;
+  price: number;
+  genetics: PlantGenetics;
+  traits: {
+    yield: number;
+    speed: number;
+    potency: number;
+  };
+  description: string;
+}
+
 interface GameStats {
   money: number;
   totalHarvested: number;
@@ -69,7 +82,7 @@ interface GameStats {
 
 const WeedGroove = () => {
   const [plants, setPlants] = useState<Plant[]>([]);
-  const [inventory, setInventory] = useState<HarvestItem[]>([]);
+  const [buds, setBuds] = useState<BudItem[]>([]);
   const [seeds, setSeeds] = useState<SeedItem[]>([]);
   const [gameStats, setGameStats] = useState<GameStats>({
     money: 1000,
@@ -80,9 +93,56 @@ const WeedGroove = () => {
     crossbreedingAttempts: 0
   });
   const [selectedTab, setSelectedTab] = useState('farm');
+  const [inventoryTab, setInventoryTab] = useState('buds');
   const [gameTime, setGameTime] = useState(Date.now());
-  const [selectedSeed1, setSelectedSeed1] = useState<string>('');
-  const [selectedSeed2, setSelectedSeed2] = useState<string>('');
+  const [selectedSeed1, setSelectedSeed1] = useState<SeedItem | null>(null);
+  const [selectedSeed2, setSelectedSeed2] = useState<SeedItem | null>(null);
+
+  // Store strains with fixed genetics
+  const storeStrains: StoreStrain[] = [
+    {
+      name: 'OG Kush',
+      price: 100,
+      genetics: { yield: 'Aa', speed: 'BB', potency: 'AA' },
+      traits: { yield: 6, speed: 9, potency: 9 },
+      description: 'Классический сорт с высокой крепостью'
+    },
+    {
+      name: 'Lemon Haze',
+      price: 120,
+      genetics: { yield: 'AA', speed: 'Aa', potency: 'Bb' },
+      traits: { yield: 8, speed: 6, potency: 5 },
+      description: 'Высокая урожайность, цитрусовый аромат'
+    },
+    {
+      name: 'Northern Lights',
+      price: 80,
+      genetics: { yield: 'Bb', speed: 'AA', potency: 'Aa' },
+      traits: { yield: 4, speed: 10, potency: 7 },
+      description: 'Быстрорастущий, устойчивый сорт'
+    },
+    {
+      name: 'White Widow',
+      price: 150,
+      genetics: { yield: 'AA', speed: 'Bb', potency: 'AA' },
+      traits: { yield: 9, speed: 5, potency: 8 },
+      description: 'Премиум сорт с отличным балансом'
+    },
+    {
+      name: 'Blue Dream',
+      price: 90,
+      genetics: { yield: 'Aa', speed: 'Aa', potency: 'Bb' },
+      traits: { yield: 7, speed: 6, potency: 4 },
+      description: 'Сбалансированный гибрид для новичков'
+    },
+    {
+      name: 'Gorilla Glue',
+      price: 200,
+      genetics: { yield: 'AA', speed: 'aa', potency: 'AA' },
+      traits: { yield: 10, speed: 3, potency: 10 },
+      description: 'Максимальная урожайность и крепость'
+    }
+  ];
 
   // Load game state from localStorage
   useEffect(() => {
@@ -90,7 +150,7 @@ const WeedGroove = () => {
     if (savedGame) {
       const data = JSON.parse(savedGame);
       setPlants(data.plants || []);
-      setInventory(data.inventory || []);
+      setBuds(data.buds || []);
       setSeeds(data.seeds || []);
       setGameStats(data.gameStats || gameStats);
       setGameTime(data.gameTime || Date.now());
@@ -101,13 +161,13 @@ const WeedGroove = () => {
   useEffect(() => {
     const gameData = {
       plants,
-      inventory,
+      buds,
       seeds,
       gameStats,
       gameTime
     };
     localStorage.setItem('weedgroove-save', JSON.stringify(gameData));
-  }, [plants, inventory, seeds, gameStats, gameTime]);
+  }, [plants, buds, seeds, gameStats, gameTime]);
 
   // Game time progression
   useEffect(() => {
@@ -131,12 +191,20 @@ const WeedGroove = () => {
     return () => clearInterval(interval);
   }, [gameTime]);
 
-  // Generate random genetics
-  const generateGenetics = (): PlantGenetics => ({
-    yield: ['AA', 'Aa', 'aa'][Math.floor(Math.random() * 3)],
-    speed: ['BB', 'Bb', 'bb'][Math.floor(Math.random() * 3)],
-    potency: ['CC', 'Cc', 'cc'][Math.floor(Math.random() * 3)]
-  });
+  // Generate hybrid name from parent names
+  const generateHybridName = (parent1: string, parent2: string): string => {
+    const words1 = parent1.toLowerCase().split(' ');
+    const words2 = parent2.toLowerCase().split(' ');
+    
+    // Take first word from parent1 and last word from parent2
+    const firstPart = words1[0];
+    const secondPart = words2[words2.length - 1];
+    
+    // Capitalize first letters
+    const hybridName = `${firstPart.charAt(0).toUpperCase() + firstPart.slice(1)} ${secondPart.charAt(0).toUpperCase() + secondPart.slice(1)}`;
+    
+    return hybridName;
+  };
 
   // Calculate traits from genetics
   const calculateTraits = (genetics: PlantGenetics) => ({
@@ -151,21 +219,28 @@ const WeedGroove = () => {
              2 + Math.floor(Math.random() * 3)
   });
 
+  // Get trait range from genetics
+  const getTraitRange = (gene: string) => {
+    switch (gene) {
+      case 'AA': case 'BB': case 'CC': return [8, 10];
+      case 'Aa': case 'Bb': case 'Cc': return [5, 7];
+      case 'aa': case 'bb': case 'cc': return [2, 4];
+      default: return [1, 10];
+    }
+  };
+
   // Crossbreed two seeds to create a new unknown strain
-  const crossbreedSeeds = (seedId1: string, seedId2: string) => {
-    const seed1 = seeds.find(s => s.id === seedId1);
-    const seed2 = seeds.find(s => s.id === seedId2);
-    
-    if (!seed1 || !seed2 || seed1.quantity < 1 || seed2.quantity < 1) return;
+  const crossbreedSeeds = () => {
+    if (!selectedSeed1 || !selectedSeed2 || selectedSeed1.quantity < 1 || selectedSeed2.quantity < 1) return;
 
     // Create hybrid genetics
     const hybridGenetics: PlantGenetics = {
-      yield: Math.random() < 0.5 ? seed1.genetics.yield : seed2.genetics.yield,
-      speed: Math.random() < 0.5 ? seed1.genetics.speed : seed2.genetics.speed,
-      potency: Math.random() < 0.5 ? seed1.genetics.potency : seed2.genetics.potency
+      yield: Math.random() < 0.5 ? selectedSeed1.genetics.yield : selectedSeed2.genetics.yield,
+      speed: Math.random() < 0.5 ? selectedSeed1.genetics.speed : selectedSeed2.genetics.speed,
+      potency: Math.random() < 0.5 ? selectedSeed1.genetics.potency : selectedSeed2.genetics.potency
     };
 
-    // Add some random mutation chance
+    // Add some random mutation chance (10%)
     if (Math.random() < 0.1) {
       const mutations = ['AA', 'Aa', 'aa'];
       hybridGenetics.yield = mutations[Math.floor(Math.random() * 3)];
@@ -180,10 +255,11 @@ const WeedGroove = () => {
     }
 
     const hybridTraits = calculateTraits(hybridGenetics);
+    const hybridName = generateHybridName(selectedSeed1.name, selectedSeed2.name);
     
     const newSeed: SeedItem = {
       id: Date.now().toString(),
-      name: `${seed1.name} × ${seed2.name} #${gameStats.crossbreedingAttempts + 1}`,
+      name: hybridName,
       quantity: 1,
       genetics: hybridGenetics,
       traits: hybridTraits,
@@ -193,7 +269,7 @@ const WeedGroove = () => {
 
     // Consume parent seeds
     setSeeds(prev => prev.map(seed => {
-      if (seed.id === seedId1 || seed.id === seedId2) {
+      if (seed.id === selectedSeed1.id || seed.id === selectedSeed2.id) {
         return { ...seed, quantity: seed.quantity - 1 };
       }
       return seed;
@@ -208,59 +284,62 @@ const WeedGroove = () => {
       experimentsCount: prev.experimentsCount + 1
     }));
 
-    setSelectedSeed1('');
-    setSelectedSeed2('');
+    setSelectedSeed1(null);
+    setSelectedSeed2(null);
   };
 
-  const plantSeed = (seedId?: string, strain?: string) => {
-    if (seedId) {
-      // Plant from seeds inventory
-      const seed = seeds.find(s => s.id === seedId);
-      if (!seed || seed.quantity < 1) return;
+  const buySeed = (strain: StoreStrain) => {
+    if (gameStats.money < strain.price) return;
 
-      const newPlant: Plant = {
-        id: Date.now().toString(),
-        name: seed.name,
-        stage: 'seed',
-        progress: 0,
-        genetics: seed.genetics,
-        traits: seed.traits,
-        plantedAt: gameTime
-      };
+    const newSeed: SeedItem = {
+      id: Date.now().toString(),
+      name: strain.name,
+      quantity: 1,
+      genetics: strain.genetics,
+      traits: strain.traits,
+      isKnownGenetics: true, // Store seeds have known genetics
+      createdAt: gameTime
+    };
 
-      setPlants(prev => [...prev, newPlant]);
-      setSeeds(prev => prev.map(s => 
-        s.id === seedId ? { ...s, quantity: s.quantity - 1 } : s
-      ).filter(s => s.quantity > 0));
-      
-    } else if (strain) {
-      // Buy and plant new seed from store
-      if (gameStats.money < 50) return;
-      
-      const genetics = generateGenetics();
-      const traits = calculateTraits(genetics);
-      
-      const newPlant: Plant = {
-        id: Date.now().toString(),
-        name: strain,
-        stage: 'seed',
-        progress: 0,
-        genetics,
-        traits,
-        plantedAt: gameTime
-      };
-      
-      setPlants(prev => [...prev, newPlant]);
-      setGameStats(prev => ({ ...prev, money: prev.money - 50 }));
-    }
+    setSeeds(prev => {
+      const existing = prev.find(s => s.name === strain.name && s.isKnownGenetics);
+      if (existing) {
+        return prev.map(s => 
+          s.id === existing.id ? { ...s, quantity: s.quantity + 1 } : s
+        );
+      }
+      return [...prev, newSeed];
+    });
+
+    setGameStats(prev => ({ ...prev, money: prev.money - strain.price }));
+  };
+
+  const plantSeed = (seedId: string) => {
+    const seed = seeds.find(s => s.id === seedId);
+    if (!seed || seed.quantity < 1) return;
+
+    const newPlant: Plant = {
+      id: Date.now().toString(),
+      name: seed.name,
+      stage: 'seed',
+      progress: 0,
+      genetics: seed.genetics,
+      traits: seed.traits,
+      plantedAt: gameTime
+    };
+
+    setPlants(prev => [...prev, newPlant]);
+    setSeeds(prev => prev.map(s => 
+      s.id === seedId ? { ...s, quantity: s.quantity - 1 } : s
+    ).filter(s => s.quantity > 0));
   };
 
   const harvestPlant = (plantId: string) => {
     const plant = plants.find(p => p.id === plantId);
     if (!plant || plant.stage !== 'harvest') return;
     
-    // Add to inventory (traits hidden!)
-    const harvestItem: HarvestItem = {
+    // Add to buds inventory (traits hidden unless researched!)
+    const budItem: BudItem = {
       id: Date.now().toString(),
       name: plant.name,
       quantity: plant.traits.yield,
@@ -270,7 +349,7 @@ const WeedGroove = () => {
       harvestedAt: gameTime
     };
 
-    setInventory(prev => {
+    setBuds(prev => {
       const existing = prev.find(item => item.name === plant.name && !item.isResearched);
       if (existing) {
         return prev.map(item => 
@@ -279,7 +358,7 @@ const WeedGroove = () => {
             : item
         );
       }
-      return [...prev, harvestItem];
+      return [...prev, budItem];
     });
     
     setGameStats(prev => ({
@@ -292,8 +371,8 @@ const WeedGroove = () => {
     setPlants(prev => prev.filter(p => p.id !== plantId));
   };
 
-  const sellHarvest = (itemId: string) => {
-    const item = inventory.find(i => i.id === itemId);
+  const sellBuds = (itemId: string) => {
+    const item = buds.find(i => i.id === itemId);
     if (!item) return;
 
     const basePrice = item.isResearched 
@@ -303,11 +382,11 @@ const WeedGroove = () => {
     const totalValue = basePrice * item.quantity;
     
     setGameStats(prev => ({ ...prev, money: prev.money + totalValue }));
-    setInventory(prev => prev.filter(i => i.id !== itemId));
+    setBuds(prev => prev.filter(i => i.id !== itemId));
   };
 
-  const convertToSeeds = (itemId: string) => {
-    const item = inventory.find(i => i.id === itemId);
+  const convertBudsToSeeds = (itemId: string) => {
+    const item = buds.find(i => i.id === itemId);
     if (!item || gameStats.money < 100) return;
 
     const newSeed: SeedItem = {
@@ -321,18 +400,18 @@ const WeedGroove = () => {
     };
 
     setSeeds(prev => [...prev, newSeed]);
-    setInventory(prev => prev.filter(i => i.id !== itemId));
+    setBuds(prev => prev.filter(i => i.id !== itemId));
     setGameStats(prev => ({ ...prev, money: prev.money - 100 }));
   };
 
-  const researchItem = (itemId: string, labType: 'cheap' | 'premium') => {
-    const item = inventory.find(i => i.id === itemId);
+  const researchBuds = (itemId: string, labType: 'cheap' | 'premium') => {
+    const item = buds.find(i => i.id === itemId);
     if (!item || item.isResearched) return;
 
     const cost = labType === 'cheap' ? 100 : 500;
     if (gameStats.money < cost) return;
 
-    setInventory(prev => prev.map(i => 
+    setBuds(prev => prev.map(i => 
       i.id === itemId ? { ...i, isResearched: true } : i
     ));
     setGameStats(prev => ({ 
@@ -367,6 +446,15 @@ const WeedGroove = () => {
       default: return 'bg-gray-100';
     }
   };
+
+  const renderTraitBar = (value: number, max = 10) => (
+    <div className="w-full bg-gray-200 rounded-full h-2">
+      <div 
+        className="bg-plant-500 h-2 rounded-full" 
+        style={{ width: `${(value / max) * 100}%` }}
+      />
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-plant-50 to-plant-100 p-4">
@@ -459,17 +547,10 @@ const WeedGroove = () => {
               <Card className="border-2 border-dashed border-plant-300 hover:border-plant-500 transition-colors">
                 <CardContent className="flex flex-col items-center justify-center h-full min-h-[200px]">
                   <Icon name="Plus" size={48} className="text-plant-400 mb-4" />
-                  <Button 
-                    onClick={() => plantSeed(undefined, 'Случайный сорт')}
-                    disabled={gameStats.money < 50}
-                    className="bg-plant-500 hover:bg-plant-600 mb-2"
-                  >
-                    🌱 Купить семя ($50)
-                  </Button>
-                  {seeds.length > 0 && (
+                  {seeds.length > 0 ? (
                     <Select onValueChange={(value) => plantSeed(value)} value="">
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Посадить свои семена" />
+                        <SelectValue placeholder="Посадить семена" />
                       </SelectTrigger>
                       <SelectContent>
                         {seeds.map(seed => (
@@ -480,6 +561,10 @@ const WeedGroove = () => {
                         ))}
                       </SelectContent>
                     </Select>
+                  ) : (
+                    <p className="text-center text-gray-500">
+                      Купи семена в магазине для посадки
+                    </p>
                   )}
                 </CardContent>
               </Card>
@@ -487,184 +572,317 @@ const WeedGroove = () => {
           </TabsContent>
 
           <TabsContent value="inventory" className="space-y-6">
-            <h2 className="text-2xl font-bold text-plant-800">Инвентарь урожая</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {inventory.map(item => (
-                <Card key={item.id} className="relative">
-                  <CardHeader>
-                    <CardTitle className="flex items-center justify-between">
-                      <span>{item.name}</span>
-                      <Badge variant={item.isResearched ? "default" : "secondary"}>
-                        {item.quantity}г {item.isResearched ? '✅' : '❓'}
-                      </Badge>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {item.isResearched ? (
-                      <div className="grid grid-cols-3 gap-2 mb-4 text-sm">
-                        <div className="text-center">
-                          <div className="font-semibold">🌾 {item.traits.yield}</div>
-                          <div className="text-xs opacity-70">Урожай</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="font-semibold">⏱️ {item.traits.speed}</div>
-                          <div className="text-xs opacity-70">Скорость</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="font-semibold">💨 {item.traits.potency}</div>
-                          <div className="text-xs opacity-70">Крепость</div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-center mb-4 text-gray-500">
-                        ❓ Характеристики неизвестны
-                      </div>
-                    )}
-                    
-                    <div className="space-y-2">
-                      <Button 
-                        onClick={() => sellHarvest(item.id)}
-                        variant="outline" 
-                        className="w-full"
-                      >
-                        💰 Продать (${item.isResearched ? item.traits.yield * item.traits.potency * 10 * item.quantity : 50 * item.quantity})
-                      </Button>
-                      <Button 
-                        onClick={() => convertToSeeds(item.id)}
-                        disabled={gameStats.money < 100}
-                        variant="outline" 
-                        className="w-full"
-                      >
-                        🌱 В семена ($100)
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-plant-800">Инвентарь</h2>
             </div>
+            
+            <Tabs value={inventoryTab} onValueChange={setInventoryTab}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="buds">🌸 Шишки ({buds.length})</TabsTrigger>
+                <TabsTrigger value="seeds">🌱 Семена ({seeds.length})</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="buds" className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {buds.map(item => (
+                    <Card key={item.id} className="relative group">
+                      <CardHeader>
+                        <CardTitle className="flex items-center justify-between">
+                          <span>{item.name}</span>
+                          <Badge variant={item.isResearched ? "default" : "secondary"}>
+                            {item.quantity}г {item.isResearched ? '✅' : '❓'}
+                          </Badge>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {item.isResearched ? (
+                          <div className="grid grid-cols-3 gap-2 mb-4 text-sm">
+                            <div className="text-center">
+                              <div className="font-semibold">🌾 {item.traits.yield}</div>
+                              <div className="text-xs opacity-70">Урожай</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="font-semibold">⏱️ {item.traits.speed}</div>
+                              <div className="text-xs opacity-70">Скорость</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="font-semibold">💨 {item.traits.potency}</div>
+                              <div className="text-xs opacity-70">Крепость</div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-center mb-4 text-gray-500">
+                            ❓ Характеристики неизвестны
+                          </div>
+                        )}
+                        
+                        <div className="space-y-2">
+                          <Button 
+                            onClick={() => sellBuds(item.id)}
+                            variant="outline" 
+                            className="w-full"
+                          >
+                            💰 Продать (${item.isResearched ? item.traits.yield * item.traits.potency * 10 * item.quantity : 50 * item.quantity})
+                          </Button>
+                          <Button 
+                            onClick={() => convertBudsToSeeds(item.id)}
+                            disabled={gameStats.money < 100}
+                            variant="outline" 
+                            className="w-full"
+                          >
+                            🌱 В семена ($100)
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                  {buds.length === 0 && (
+                    <div className="col-span-full text-center text-gray-500 py-8">
+                      Нет шишек в инвентаре. Собери урожай!
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="seeds" className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {seeds.map(seed => (
+                    <Card key={seed.id} className="relative group">
+                      <CardHeader>
+                        <CardTitle className="flex items-center justify-between">
+                          <span>{seed.name}</span>
+                          <Badge variant={seed.isKnownGenetics ? "default" : "secondary"}>
+                            {seed.quantity} шт {seed.isKnownGenetics ? '✅' : '❓'}
+                          </Badge>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {seed.isKnownGenetics ? (
+                          <div className="space-y-2 mb-4">
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm">🌾 Урожай:</span>
+                              <span className="text-sm font-medium">{seed.traits.yield}/10</span>
+                            </div>
+                            {renderTraitBar(seed.traits.yield)}
+                            
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm">⏱️ Скорость:</span>
+                              <span className="text-sm font-medium">{seed.traits.speed}/10</span>
+                            </div>
+                            {renderTraitBar(seed.traits.speed)}
+                            
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm">💨 Крепость:</span>
+                              <span className="text-sm font-medium">{seed.traits.potency}/10</span>
+                            </div>
+                            {renderTraitBar(seed.traits.potency)}
+                          </div>
+                        ) : (
+                          <div className="text-center mb-4 text-gray-500">
+                            ❓ Генетика неизвестна
+                          </div>
+                        )}
+                        
+                        <Button 
+                          onClick={() => plantSeed(seed.id)}
+                          className="w-full bg-plant-600 hover:bg-plant-700"
+                        >
+                          🌱 Посадить
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                  {seeds.length === 0 && (
+                    <div className="col-span-full text-center text-gray-500 py-8">
+                      Нет семян в инвентаре. Купи их в магазине!
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
           </TabsContent>
 
           <TabsContent value="genetics" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>🧬 Скрещивание сортов</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Родитель 1:</label>
-                      <Select value={selectedSeed1} onValueChange={setSelectedSeed1}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Выбери семя" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {seeds.filter(s => s.quantity > 0).map(seed => (
-                            <SelectItem key={seed.id} value={seed.id}>
-                              {seed.name} ({seed.quantity})
-                              {seed.isKnownGenetics ? ' ✅' : ' ❓'}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Родитель 2:</label>
-                      <Select value={selectedSeed2} onValueChange={setSelectedSeed2}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Выбери семя" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {seeds.filter(s => s.quantity > 0 && s.id !== selectedSeed1).map(seed => (
-                            <SelectItem key={seed.id} value={seed.id}>
-                              {seed.name} ({seed.quantity})
-                              {seed.isKnownGenetics ? ' ✅' : ' ❓'}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  
-                  <Button 
-                    onClick={() => crossbreedSeeds(selectedSeed1, selectedSeed2)}
-                    disabled={!selectedSeed1 || !selectedSeed2}
-                    className="w-full bg-plant-600 hover:bg-plant-700"
-                  >
-                    🧬 Скрестить сорта
-                  </Button>
-                  
-                  <div className="text-sm text-gray-600 bg-plant-50 p-3 rounded">
-                    ⚠️ Результат скрещивания непредсказуем! Характеристики гибрида будут неизвестны до исследования.
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>📚 Генетика 101</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="p-4 bg-plant-50 rounded-lg">
-                      <h3 className="font-semibold mb-2">Как работает генетика:</h3>
-                      <ul className="space-y-1 text-sm">
-                        <li><strong>AA, BB, CC</strong> - доминантные гены (8-10 баллов)</li>
-                        <li><strong>Aa, Bb, Cc</strong> - гибридные гены (5-7 баллов)</li>
-                        <li><strong>aa, bb, cc</strong> - рецессивные гены (2-4 балла)</li>
-                      </ul>
-                    </div>
-                    <div className="p-4 bg-yellow-50 rounded-lg">
-                      <h3 className="font-semibold mb-2">🔬 Мутации:</h3>
-                      <p className="text-sm">При скрещивании есть 10% шанс мутации каждого гена!</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
+            <h2 className="text-2xl font-bold text-plant-800">🧬 Лаборатория скрещивания</h2>
+            
             <Card>
               <CardHeader>
-                <CardTitle>🌱 Банк семян</CardTitle>
+                <CardTitle>Скрещивание сортов</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {seeds.map(seed => (
-                    <Card key={seed.id} className="p-4">
-                      <h3 className="font-semibold mb-2">{seed.name}</h3>
-                      <p className="text-sm mb-2">Количество: {seed.quantity}</p>
-                      {seed.isKnownGenetics ? (
-                        <div className="text-xs space-y-1">
-                          <div>Урожай: {seed.genetics.yield} ({seed.traits.yield}/10)</div>
-                          <div>Скорость: {seed.genetics.speed} ({seed.traits.speed}/10)</div>
-                          <div>Крепость: {seed.genetics.potency} ({seed.traits.potency}/10)</div>
+                <div className="grid grid-cols-2 gap-8 mb-6">
+                  {/* Parent 1 Selection */}
+                  <Card className={`p-6 border-2 transition-all cursor-pointer ${selectedSeed1 ? 'border-plant-500 bg-plant-50' : 'border-dashed border-gray-300 hover:border-gray-400'}`}>
+                    <div className="text-center">
+                      <div className="text-4xl mb-2">🌱</div>
+                      {selectedSeed1 ? (
+                        <div>
+                          <h3 className="font-semibold mb-2">{selectedSeed1.name}</h3>
+                          <p className="text-sm text-gray-600 mb-3">Количество: {selectedSeed1.quantity}</p>
+                          {selectedSeed1.isKnownGenetics && (
+                            <div className="space-y-1 text-sm">
+                              <div>🌾 Урожай: {selectedSeed1.traits.yield}/10</div>
+                              <div>⏱️ Скорость: {selectedSeed1.traits.speed}/10</div>
+                              <div>💨 Крепость: {selectedSeed1.traits.potency}/10</div>
+                            </div>
+                          )}
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="mt-2"
+                            onClick={() => setSelectedSeed1(null)}
+                          >
+                            Убрать
+                          </Button>
                         </div>
                       ) : (
-                        <div className="text-xs text-gray-500">❓ Генетика неизвестна</div>
+                        <div>
+                          <h3 className="font-semibold mb-2">Родитель 1</h3>
+                          <p className="text-sm text-gray-500 mb-3">Выбери семя</p>
+                          <Select onValueChange={(value) => {
+                            const seed = seeds.find(s => s.id === value);
+                            if (seed) setSelectedSeed1(seed);
+                          }} value="">
+                            <SelectTrigger>
+                              <SelectValue placeholder="Выбрать" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {seeds.filter(s => s.quantity > 0).map(seed => (
+                                <SelectItem key={seed.id} value={seed.id}>
+                                  {seed.name} ({seed.quantity})
+                                  {seed.isKnownGenetics ? ' ✅' : ' ❓'}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       )}
-                    </Card>
-                  ))}
+                    </div>
+                  </Card>
+
+                  {/* Parent 2 Selection */}
+                  <Card className={`p-6 border-2 transition-all cursor-pointer ${selectedSeed2 ? 'border-plant-500 bg-plant-50' : 'border-dashed border-gray-300 hover:border-gray-400'}`}>
+                    <div className="text-center">
+                      <div className="text-4xl mb-2">🌱</div>
+                      {selectedSeed2 ? (
+                        <div>
+                          <h3 className="font-semibold mb-2">{selectedSeed2.name}</h3>
+                          <p className="text-sm text-gray-600 mb-3">Количество: {selectedSeed2.quantity}</p>
+                          {selectedSeed2.isKnownGenetics && (
+                            <div className="space-y-1 text-sm">
+                              <div>🌾 Урожай: {selectedSeed2.traits.yield}/10</div>
+                              <div>⏱️ Скорость: {selectedSeed2.traits.speed}/10</div>
+                              <div>💨 Крепость: {selectedSeed2.traits.potency}/10</div>
+                            </div>
+                          )}
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="mt-2"
+                            onClick={() => setSelectedSeed2(null)}
+                          >
+                            Убрать
+                          </Button>
+                        </div>
+                      ) : (
+                        <div>
+                          <h3 className="font-semibold mb-2">Родитель 2</h3>
+                          <p className="text-sm text-gray-500 mb-3">Выбери семя</p>
+                          <Select onValueChange={(value) => {
+                            const seed = seeds.find(s => s.id === value);
+                            if (seed) setSelectedSeed2(seed);
+                          }} value="">
+                            <SelectTrigger>
+                              <SelectValue placeholder="Выбрать" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {seeds.filter(s => s.quantity > 0 && s.id !== selectedSeed1?.id).map(seed => (
+                                <SelectItem key={seed.id} value={seed.id}>
+                                  {seed.name} ({seed.quantity})
+                                  {seed.isKnownGenetics ? ' ✅' : ' ❓'}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </div>
+                  </Card>
                 </div>
+
+                {/* Crossbreeding Preview */}
+                {selectedSeed1 && selectedSeed2 && (
+                  <div className="bg-plant-50 p-4 rounded-lg mb-4">
+                    <h4 className="font-semibold mb-3">Предварительный результат:</h4>
+                    <div className="grid grid-cols-3 gap-4 mb-4">
+                      <div>
+                        <div className="text-sm font-medium mb-1">🌾 Урожай</div>
+                        {selectedSeed1.isKnownGenetics && selectedSeed2.isKnownGenetics ? (
+                          <div className="text-sm">
+                            {Math.min(getTraitRange(selectedSeed1.genetics.yield)[0], getTraitRange(selectedSeed2.genetics.yield)[0])} - 
+                            {Math.max(getTraitRange(selectedSeed1.genetics.yield)[1], getTraitRange(selectedSeed2.genetics.yield)[1])}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-gray-500">❓ Неизвестно</div>
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium mb-1">⏱️ Скорость</div>
+                        {selectedSeed1.isKnownGenetics && selectedSeed2.isKnownGenetics ? (
+                          <div className="text-sm">
+                            {Math.min(getTraitRange(selectedSeed1.genetics.speed)[0], getTraitRange(selectedSeed2.genetics.speed)[0])} - 
+                            {Math.max(getTraitRange(selectedSeed1.genetics.speed)[1], getTraitRange(selectedSeed2.genetics.speed)[1])}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-gray-500">❓ Неизвестно</div>
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium mb-1">💨 Крепость</div>
+                        {selectedSeed1.isKnownGenetics && selectedSeed2.isKnownGenetics ? (
+                          <div className="text-sm">
+                            {Math.min(getTraitRange(selectedSeed1.genetics.potency)[0], getTraitRange(selectedSeed2.genetics.potency)[0])} - 
+                            {Math.max(getTraitRange(selectedSeed1.genetics.potency)[1], getTraitRange(selectedSeed2.genetics.potency)[1])}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-gray-500">❓ Неизвестно</div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-sm text-orange-600">
+                      ⚠️ Шанс мутации: 10% для каждого гена
+                    </div>
+                  </div>
+                )}
+
+                <Button 
+                  onClick={crossbreedSeeds}
+                  disabled={!selectedSeed1 || !selectedSeed2}
+                  className="w-full bg-plant-600 hover:bg-plant-700"
+                >
+                  🧬 Скрестить сорта
+                </Button>
+                
+                {selectedSeed1 && selectedSeed2 && (
+                  <div className="text-center text-sm text-gray-600 mt-2">
+                    Результат: {generateHybridName(selectedSeed1.name, selectedSeed2.name)}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="lab" className="space-y-6">
             <h2 className="text-2xl font-bold text-plant-800">🔬 Лаборатории</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               <Card className="p-4">
-                <h3 className="font-semibold mb-2">🚬 Прямое тестирование</h3>
-                <p className="text-sm text-gray-600 mb-3">Дешево, но неточно (±50%)</p>
-                <Button variant="outline" className="w-full">Скоро...</Button>
-              </Card>
-              <Card className="p-4">
-                <h3 className="font-semibold mb-2">🔬 Дешевая лаборатория</h3>
-                <p className="text-sm text-gray-600 mb-3">Точные характеристики</p>
+                <h3 className="font-semibold mb-2">🔬 Базовая лаборатория</h3>
+                <p className="text-sm text-gray-600 mb-3">Точное исследование характеристик</p>
                 <Button variant="outline" className="w-full">$100</Button>
               </Card>
               <Card className="p-4">
                 <h3 className="font-semibold mb-2">⚗️ Премиум лаборатория</h3>
-                <p className="text-sm text-gray-600 mb-3">Быстрые и точные результаты</p>
+                <p className="text-sm text-gray-600 mb-3">Быстрые и детальные результаты</p>
                 <Button variant="outline" className="w-full">$500</Button>
               </Card>
             </div>
@@ -675,13 +893,13 @@ const WeedGroove = () => {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {inventory.filter(item => !item.isResearched).map(item => (
+                  {buds.filter(item => !item.isResearched).map(item => (
                     <Card key={item.id} className="p-4">
                       <h3 className="font-semibold mb-2">{item.name}</h3>
                       <p className="text-sm mb-3">{item.quantity}г образца</p>
                       <div className="space-y-2">
                         <Button 
-                          onClick={() => researchItem(item.id, 'cheap')}
+                          onClick={() => researchBuds(item.id, 'cheap')}
                           disabled={gameStats.money < 100}
                           size="sm" 
                           className="w-full"
@@ -689,7 +907,7 @@ const WeedGroove = () => {
                           🔬 Исследовать ($100)
                         </Button>
                         <Button 
-                          onClick={() => researchItem(item.id, 'premium')}
+                          onClick={() => researchBuds(item.id, 'premium')}
                           disabled={gameStats.money < 500}
                           size="sm" 
                           variant="outline"
@@ -700,7 +918,7 @@ const WeedGroove = () => {
                       </div>
                     </Card>
                   ))}
-                  {inventory.filter(item => !item.isResearched).length === 0 && (
+                  {buds.filter(item => !item.isResearched).length === 0 && (
                     <div className="col-span-full text-center text-gray-500 py-8">
                       Нет образцов для исследования
                     </div>
@@ -717,16 +935,37 @@ const WeedGroove = () => {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {['Indica Classic', 'Sativa Power', 'Hybrid Dream', 'Auto Flower', 'CBD Special', 'THC Monster'].map(strain => (
-                    <Card key={strain} className="p-4">
-                      <h3 className="font-semibold mb-2">{strain}</h3>
-                      <p className="text-sm text-gray-600 mb-3">Случайная генетика ✅ Известные характеристики</p>
+                  {storeStrains.map(strain => (
+                    <Card key={strain.name} className="p-4">
+                      <h3 className="font-semibold mb-2">{strain.name}</h3>
+                      <p className="text-sm text-gray-600 mb-3">{strain.description}</p>
+                      
+                      <div className="space-y-2 mb-4">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm">🌾 Урожай:</span>
+                          <span className="text-sm font-medium">{strain.traits.yield}/10</span>
+                        </div>
+                        {renderTraitBar(strain.traits.yield)}
+                        
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm">⏱️ Скорость:</span>
+                          <span className="text-sm font-medium">{strain.traits.speed}/10</span>
+                        </div>
+                        {renderTraitBar(strain.traits.speed)}
+                        
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm">💨 Крепость:</span>
+                          <span className="text-sm font-medium">{strain.traits.potency}/10</span>
+                        </div>
+                        {renderTraitBar(strain.traits.potency)}
+                      </div>
+                      
                       <Button 
-                        onClick={() => plantSeed(undefined, strain)}
-                        disabled={gameStats.money < 50}
+                        onClick={() => buySeed(strain)}
+                        disabled={gameStats.money < strain.price}
                         className="w-full"
                       >
-                        Купить и посадить $50
+                        Купить ${strain.price}
                       </Button>
                     </Card>
                   ))}
